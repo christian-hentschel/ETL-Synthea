@@ -34,20 +34,26 @@ LoadSyntheaTables <-
            bulkLoad = FALSE)
 {
 
-    csvList <- list.files(syntheaFileLoc, pattern = "*.csv")
+   csvList <- list.files(syntheaFileLoc, pattern = "*.csv")
 	
-    conn <- DatabaseConnector::connect(connectionDetails)
+   conn <- DatabaseConnector::connect(connectionDetails)
 
-    for (csv in csvList) {
+   for (csv in csvList) {
       batch_size <- 100000
-      offset <- 1
 
       writeLines(paste0("Loading: ", csv))
+
+      fin <- file(paste0(syntheaFileLoc,"/",csv), open = "r")
       # read header first:
-      header <- data.table::fread(file = paste0(syntheaFileLoc,"/",csv), stringsAsFactors = FALSE, header = FALSE, sep = ",", na.strings = "", skip=0, nrows=1)
+      header <- paste(readLines(fin, n = 1, warn = FALSE),"\n",sep="")
+      header <- data.table::fread(text = header, stringsAsFactors = FALSE, header = FALSE, sep = ",", na.strings = "")
       header <- as.matrix(header)[1,]
-      repeat {
-         batch <- data.table::fread(file = paste0(syntheaFileLoc,"/",csv), stringsAsFactors = FALSE, header = FALSE, sep = ",", na.strings = "", skip=offset, nrows=batch_size, col.names=header)
+
+      while (length(batch <- readLines(fin, n = batch_size, warn = FALSE)) > 0) {
+         if (!endsWith(batch, "\n")) {
+            batch <- paste(batch, "\n", sep="")
+         }
+         batch <- data.table::fread(text=batch, stringsAsFactors = FALSE, header = FALSE, sep = ",", na.strings = "", col.names=header)
 
          # experiencing type conversion errors and need to explicitly case some columns
          if ("START"       %in% colnames(batch))
@@ -88,69 +94,8 @@ LoadSyntheaTables <-
                   progressBar = TRUE
                 )
          })
-
-         if (nrow(batch) < batch_size) {
-	    break
-	 }
-         offset <- offset + batch_size
       }
-    }
-
-    on.exit(DatabaseConnector::disconnect(conn))
-
+      close(fin)
+   }
+   on.exit(DatabaseConnector::disconnect(conn))
 }
-
-
-         
-
-
-#          file = paste0(syntheaFileLoc,"/",csv),
-#          stringsAsFactors = FALSE,
-#          header = TRUE,
-#          sep = ",",
-#          na.strings = ""
-#	  skip = start,
-#	  nrows = batch_size
-#        )
-#
-  
-        # experiencing type conversion errors and need to explicitly case some columns
-#        if ("START"       %in% colnames(batch))
-#          batch$START        <-
-#          as.Date(batch$START, format = "%Y-%m-%d")
-#        if ("STOP"        %in% colnames(batch))
-#          batch$STOP         <-
-#          as.Date(batch$STOP, format = "%Y-%m-%d")
-#        if ("DATE"        %in% colnames(batch))
-#          batch$DATE         <-
-#          as.Date(batch$DATE, format = "%Y-%m-%d")
-#        if ("BIRTHDATE"   %in% colnames(batch))
-#          batch$BIRTHDATE    <-
-#          as.Date(batch$BIRTHDATE, format = "%Y-%m-%d")
-#        if ("DEATHDATE"   %in% colnames(batch))
-#          batch$DEATHDATE    <-
-#          as.Date(batch$DEATHDATE, format = "%Y-%m-%d")
-#        if ("CODE"        %in% colnames(batch))
-#          batch$CODE         <- as.character(batch$CODE)
-#        if ("REASONCODE"  %in% colnames(batch))
-#          batch$REASONCODE   <-
-#          as.character(batch$REASONCODE)
-#        if ("PHONE"       %in% colnames(batch))
-#          batch$PHONE        <-
-#          as.character(batch$PHONE)
-#        if ("UTILIZATION" %in% colnames(batch))
-#          batch$UTILIZATION  <-
-#          as.numeric(batch$UTILIZATION)
-
-#        suppressWarnings({
-#          DatabaseConnector::insertTable(
-#            conn,
-#            tableName = paste0(syntheaSchema, ".", strsplit(csv, "[.]")[[1]][1]),
-#            data = as.data.frame(batch),
-#            dropTableIfExists = FALSE,
-#            createTable = FALSE,
-#            bulkLoad = bulkLoad,
-#            progressBar = TRUE
-#          )
-#        })
-
